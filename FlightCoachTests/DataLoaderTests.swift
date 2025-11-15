@@ -78,14 +78,16 @@ final class DataLoaderTests: XCTestCase {
         // When
         let dataPoints = try await dataLoader.loadCSV(from: csvURL)
 
-        // Then
-        let calendar = Calendar.current
+        // Then - Use GMT timezone since DataLoader parses in GMT
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
         let firstPoint = dataPoints[0]
         let components = calendar.dateComponents([.hour, .minute, .second], from: firstPoint.irigTime)
 
-        XCTAssertEqual(components.hour, 21)
-        XCTAssertEqual(components.minute, 25)
-        XCTAssertEqual(components.second, 53)
+        XCTAssertEqual(components.hour, 21, "Hour should be 21 in GMT")
+        XCTAssertEqual(components.minute, 25, "Minute should be 25")
+        XCTAssertEqual(components.second, 53, "Second should be 53")
     }
 
     func testTimestampSequence() async throws {
