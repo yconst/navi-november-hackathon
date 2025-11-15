@@ -10,6 +10,11 @@ FlightCoach is a **document-based iOS application** where each document represen
 - Async/await for all heavy operations
 - On-device analysis with optional cloud-based AI coaching
 
+**Related Documentation:**
+- [README.md](README.md) - User guide with usage instructions
+- [ROADMAP.md](ROADMAP.md) - 12-hour hackathon development plan
+- [context.md](context.md) - Complete project specification and requirements
+
 ---
 
 ## Table of Contents

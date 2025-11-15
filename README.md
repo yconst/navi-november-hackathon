@@ -9,6 +9,12 @@
 
 > Transform your flight data into insights. Ask questions. Get better.
 
+**Documentation**:
+- This document - User guide and setup instructions
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture and design details
+- [ROADMAP.md](ROADMAP.md) - Development roadmap and implementation plan
+- [context.md](context.md) - Complete project specification
+
 ---
 
 ## Features
@@ -28,7 +34,40 @@
 - **Document-Based Architecture** - Each flight session is a separate document with automatic iCloud sync
 - **Speech Recognition** - Aviation terminology support with phonetic corrections
 - **Offline Capable** - All analysis runs on-device; Claude API used only for coaching insights
-- **Real-Time Processing** - Analyzes 20Hz telemetry data (72,000 data points per hour) in seconds
+- **Real-Time Processing** - Analyzes 20Hz telemetry data (84,000 data points per hour) in seconds
+
+---
+
+## How It Works
+
+FlightCoach follows a simple **three-phase workflow**:
+
+### Phase 1: Import
+1. Create a new document or open an existing flight session
+2. Select your IRIG CSV file (from Files app, iCloud Drive, or USB device)
+3. App streams and parses ~84,000 telemetry data points (takes 5-10 seconds)
+
+### Phase 2: Analyze (Automatic)
+1. Detects maneuvers automatically (Split-S, Wind-Up Turns, climbs, etc.)
+2. Calculates performance scores (Mach stability, g-onset smoothness, recovery timing)
+3. Identifies deviations and generates insights
+4. Takes 15-20 seconds, runs in background with progress indicator
+
+### Phase 3: Query (Interactive)
+1. Ask questions via voice: *"How did I do on my Split-S?"*
+2. Claude AI routes your query to the appropriate analysis tool
+3. View visualizations, metrics, and coaching recommendations
+4. All analysis happens on-device (fast, private, offline-capable)
+
+### Document-Based Architecture
+
+FlightCoach uses iOS's native document architecture, where each flight session is a separate document stored in the Files app. This provides:
+- **Automatic iCloud sync** across your devices
+- **Easy sharing** with instructors via standard iOS sharing
+- **Multi-window support** on iPad (compare flights side-by-side)
+- **Standard file management** using iOS Files app
+
+For technical details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -97,26 +136,32 @@ ANTHROPIC_API_KEY = your_api_key_here
 
 ### Quick Start
 
-1. **Import Flight Data**
-   - Tap the + button to import a CSV file
-   - Select an IRIG telemetry file from Files app
-   - Wait for parsing to complete (~5 seconds)
+FlightCoach follows the three-phase workflow described in [How It Works](#how-it-works):
 
-2. **Detect Maneuvers**
-   - App automatically detects maneuvers on import
-   - Review detected maneuvers in the list
-   - Tap any maneuver to view detailed analysis
+#### Phase 1: Import Your Flight Data
+1. Launch FlightCoach and create a new document (or open an existing one)
+2. Tap **"Import CSV"** when prompted
+3. Select your IRIG telemetry file from Files app, iCloud, or USB drive
+4. Wait for parsing (~5-10 seconds for 70 minutes of flight data)
 
-3. **Ask Questions**
-   - Tap the microphone button
-   - Ask: *"How did I do on my Split-S?"*
-   - View performance scores and visualizations
-   - Review AI coaching recommendations
+#### Phase 2: Automatic Analysis
+1. Analysis begins automatically after import
+2. Watch the progress indicator as maneuvers are detected
+3. Review the detected maneuvers list (Split-S, Wind-Up Turns, etc.)
+4. Tap any maneuver card to view detailed performance analysis
+5. Analysis completes in 15-20 seconds
 
-4. **Compare Attempts**
-   - Select multiple maneuvers
-   - Tap "Compare"
-   - See side-by-side metrics and overlay charts
+#### Phase 3: Interactive Queries
+1. Tap the **microphone button** (floating action button)
+2. Ask questions naturally:
+   - *"How did I do on my Split-S?"*
+   - *"Show me the Mach control chart"*
+   - *"What can I improve?"*
+   - *"Compare my three Split-S attempts"*
+3. View Claude's response with visualizations and coaching
+4. Explore charts interactively (zoom, pan, tap for details)
+
+**Tip**: All your documents are saved in Files app and sync via iCloud automatically.
 
 ### Sample Queries
 

@@ -7,6 +7,12 @@ FlightCoach is an iOS post-flight analysis tool for T-38 aircraft that combines 
 **Timeline**: 1-day hackathon (12 hours)
 **Primary Focus**: Split-S maneuver analysis
 **Tech Stack**: Swift, SwiftUI, Claude API (via MCP), Speech Recognition
+**User Workflow**: Import CSV → Auto-analyze → Voice query (see [ARCHITECTURE.md](ARCHITECTURE.md))
+
+**Documentation**:
+- [README.md](README.md) - User guide and installation
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture and design
+- This document - Development roadmap and timeline
 
 ---
 
@@ -40,10 +46,13 @@ FlightCoach is an iOS post-flight analysis tool for T-38 aircraft that combines 
 ### 1.3 Document Model Extension
 - **Priority**: HIGH
 - **Tasks**:
-  - [ ] Extend `FlightCoachDocument` to handle CSV import
+  - [ ] Extend `FlightCoachDocument` to handle three-phase workflow (Import → Analyze → Query)
+  - [ ] Implement state machine for document states: empty → importing → analyzing → ready
   - [ ] Add flight data storage and serialization
   - [ ] Implement document metadata (flight date, pilot info)
+  - [ ] Cache analysis results in document to avoid recomputation
 - **Output**: Enhanced `FlightCoachDocument.swift`
+- **Reference**: See [ARCHITECTURE.md](ARCHITECTURE.md#document-lifecycle) for state diagram
 
 ---
 
