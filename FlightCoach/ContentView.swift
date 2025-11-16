@@ -261,6 +261,9 @@ struct ReadyView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(12)
 
+                // Flight Path Visualization
+                FlightPathView(dataPoints: document.telemetryData)
+
                 // Maneuvers List
                 if !document.detectedManeuvers.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
@@ -583,6 +586,175 @@ struct ErrorView: View {
                 .padding(.horizontal)
         }
         .padding()
+    }
+}
+
+// MARK: - Flight Path View
+
+struct FlightPathView: View {
+    let dataPoints: [FlightDataPoint]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Flight Path")
+                .font(.title3)
+                .fontWeight(.bold)
+
+            if hasValidCoordinates {
+                VStack(spacing: 4) {
+                    Canvas { context, size in
+                        drawFlightPath(context: context, size: size)
+                    }
+                    .frame(height: 300)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+
+                    if let stats = coordinateStats {
+                        Text("Range: \(String(format: "%.4f", stats.latRange))° lat × \(String(format: "%.4f", stats.lonRange))° lon | \(stats.pointCount) points")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            } else {
+                Text("No GPS coordinates available")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(height: 100)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+            }
+        }
+    }
+
+    private var hasValidCoordinates: Bool {
+        dataPoints.contains { $0.latitude != nil && $0.longitude != nil }
+    }
+
+    private var coordinateStats: (latRange: Double, lonRange: Double, pointCount: Int)? {
+        let validPoints = dataPoints.compactMap { point -> (Double, Double)? in
+            guard let lat = point.latitude, let lon = point.longitude else { return nil }
+            return (lat, lon)
+        }
+        guard !validPoints.isEmpty else { return nil }
+
+        let lats = validPoints.map { $0.0 }
+        let lons = validPoints.map { $0.1 }
+        guard let minLat = lats.min(), let maxLat = lats.max(),
+              let minLon = lons.min(), let maxLon = lons.max() else { return nil }
+
+        return (maxLat - minLat, maxLon - minLon, validPoints.count)
+    }
+
+    private func drawFlightPath(context: GraphicsContext, size: CGSize) {
+        print("=== FLIGHT PATH DEBUG ===")
+        print("Canvas size: \(size.width) x \(size.height)")
+
+        // Extract points with valid coordinates and downsample to ~500 points
+        let validPoints = dataPoints.compactMap { point -> (Double, Double)? in
+            guard let lat = point.latitude, let lon = point.longitude else { return nil }
+            return (lat, lon)
+        }
+
+        print("Total data points: \(dataPoints.count)")
+        print("Valid GPS points: \(validPoints.count)")
+
+        guard !validPoints.isEmpty else {
+            print("ERROR: No valid points!")
+            return
+        }
+
+        // Downsample to reasonable number of points for rendering
+        // Use more points for better detail (2000 instead of 500)
+        let sampleStride = max(1, validPoints.count / 2000)
+        let sampledPoints = Swift.stride(from: 0, to: validPoints.count, by: sampleStride).map { validPoints[$0] }
+
+        print("Sample stride: \(sampleStride)")
+        print("Sampled points: \(sampledPoints.count)")
+
+        // Calculate bounds
+        let lats = sampledPoints.map { $0.0 }
+        let lons = sampledPoints.map { $0.1 }
+
+        guard let minLat = lats.min(), let maxLat = lats.max(),
+              let minLon = lons.min(), let maxLon = lons.max() else {
+            print("ERROR: Could not calculate bounds!")
+            return
+        }
+
+        print("Latitude bounds: \(minLat) to \(maxLat)")
+        print("Longitude bounds: \(minLon) to \(maxLon)")
+
+        let latRange = maxLat - minLat
+        let lonRange = maxLon - minLon
+
+        print("Lat range: \(latRange)°")
+        print("Lon range: \(lonRange)°")
+
+        // Add padding
+        let padding: CGFloat = 20
+        let drawWidth = size.width - 2 * padding
+        let drawHeight = size.height - 2 * padding
+
+        // Calculate center point
+        let centerLat = (minLat + maxLat) / 2.0
+
+        // Adjust longitude range to account for latitude compression
+        // At this latitude, degrees of longitude are shorter than degrees of latitude
+        let cosLat = cos(centerLat * .pi / 180.0)
+        let adjustedLonRange = lonRange * cosLat
+
+        // Determine which dimension is limiting (maintain aspect ratio)
+        let latScale = drawHeight / latRange
+        let lonScale = drawWidth / adjustedLonRange
+        let scale = min(latScale, lonScale)
+
+        // Calculate actual drawing dimensions
+        let actualWidth = CGFloat(adjustedLonRange) * scale
+        let actualHeight = CGFloat(latRange) * scale
+
+        // Center the drawing
+        let offsetX = (drawWidth - actualWidth) / 2
+        let offsetY = (drawHeight - actualHeight) / 2
+
+        // Convert lat/lon to screen coordinates
+        func toScreen(_ lat: Double, _ lon: Double) -> CGPoint {
+            let x = padding + offsetX + CGFloat((lon - minLon) * cosLat) * scale
+            let y = size.height - (padding + offsetY + CGFloat((lat - minLat)) * scale)
+            return CGPoint(x: x, y: y)
+        }
+
+        // Draw the flight path
+        var path = Path()
+
+        if let first = sampledPoints.first {
+            path.move(to: toScreen(first.0, first.1))
+        }
+
+        for point in sampledPoints.dropFirst() {
+            path.addLine(to: toScreen(point.0, point.1))
+        }
+
+        // Draw the path with black stroke
+        context.stroke(path, with: .color(.black), lineWidth: 2)
+
+        // Draw start point (green)
+        if let first = sampledPoints.first {
+            let startPoint = toScreen(first.0, first.1)
+            context.fill(
+                Path(ellipseIn: CGRect(x: startPoint.x - 5, y: startPoint.y - 5, width: 10, height: 10)),
+                with: .color(.green)
+            )
+        }
+
+        // Draw end point (red)
+        if let last = sampledPoints.last {
+            let endPoint = toScreen(last.0, last.1)
+            context.fill(
+                Path(ellipseIn: CGRect(x: endPoint.x - 5, y: endPoint.y - 5, width: 10, height: 10)),
+                with: .color(.red)
+            )
+        }
     }
 }
 

@@ -162,7 +162,9 @@ actor DataLoader {
             rudderPos: getDoubleValue("RUDDER_POS", from: values, columnMap: columnMap) ?? 0.0,
             weightOnWheels: getBoolValue("ADC_AIR_GND_WOW", from: values, columnMap: columnMap) ?? false,
             lateralAccel: getDoubleValue("NY_LATERAL_ACCEL", from: values, columnMap: columnMap) ?? 0.0,
-            longitudinalAccel: getDoubleValue("NX_LONG_ACCEL", from: values, columnMap: columnMap) ?? 0.0
+            longitudinalAccel: getDoubleValue("NX_LONG_ACCEL", from: values, columnMap: columnMap) ?? 0.0,
+            latitude: parseGPSLatitude(from: values, columnMap: columnMap),
+            longitude: parseGPSLongitude(from: values, columnMap: columnMap)
         )
 
         return dataPoint
@@ -190,6 +192,51 @@ actor DataLoader {
             return nil
         }
         return intValue == 1
+    }
+
+    /// Parse GPS latitude from degrees and minutes format
+    /// GPS_LAT_DIRECT: 1=North, 0=South (based on typical GPS encoding)
+    /// GPS_LAT_DEG: Degrees (0-90)
+    /// GPS_LAT_MIN: Minutes (0-60)
+    /// Formula: decimal_degrees = degrees + (minutes / 60)
+    private func parseGPSLatitude(from values: [String], columnMap: [String: Int]) -> Double? {
+        guard let degrees = getDoubleValue("GPS_LAT_DEG", from: values, columnMap: columnMap),
+              let minutes = getDoubleValue("GPS_LAT_MIN", from: values, columnMap: columnMap),
+              let direction = getDoubleValue("GPS_LAT_DIRECT", from: values, columnMap: columnMap) else {
+            return nil
+        }
+
+        var latitude = degrees + (minutes / 60.0)
+
+        // If direction is 0, latitude is South (negative)
+        if direction == 0 {
+            latitude = -latitude
+        }
+
+        return latitude
+    }
+
+    /// Parse GPS longitude from degrees and minutes format
+    /// GPS_LONG_DIRECT: 1=West, 0=East (based on typical GPS encoding for western hemisphere)
+    /// GPS_LONG_DEG: Degrees (0-180)
+    /// GPS_LONG_MIN: Minutes (0-60)
+    /// Formula: decimal_degrees = degrees + (minutes / 60)
+    private func parseGPSLongitude(from values: [String], columnMap: [String: Int]) -> Double? {
+        guard let degrees = getDoubleValue("GPS_LONG_DEG", from: values, columnMap: columnMap),
+              let minutes = getDoubleValue("GPS_LONG_MIN", from: values, columnMap: columnMap),
+              let direction = getDoubleValue("GPS_LONG_DIRECT", from: values, columnMap: columnMap) else {
+            return nil
+        }
+
+        var longitude = degrees + (minutes / 60.0)
+
+        // If direction is 1, longitude is West (negative)
+        // Edwards AFB is in western USA, so longitudes should be negative
+        if direction == 1 {
+            longitude = -longitude
+        }
+
+        return longitude
     }
 
     /// Parse IRIG timestamp format: "DDD:HH:MM:SS.SSSSSS"

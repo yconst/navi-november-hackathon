@@ -142,9 +142,9 @@ actor TakeoffDetector: ManeuverDetector {
 
         // 2. Airspeed increase (20 points)
         maxScore += 20.0
-        let startSpeed = data[startIndex].airspeed
-        let endSpeed = data[endIndex].airspeed
-        if endSpeed > startSpeed + 30.0 {  // Gained at least 30 kts
+        let startSpeed = data[startIndex].computedAirspeed
+        let endSpeed = data[endIndex].computedAirspeed
+        if endSpeed > startSpeed + 20.0 {  // Gained at least 20 kts
             score += 20.0
         } else if endSpeed > startSpeed {
             score += 10.0
@@ -153,9 +153,9 @@ actor TakeoffDetector: ManeuverDetector {
         // 3. Altitude gain (20 points)
         maxScore += 20.0
         let altitudeGain = data[endIndex].altitude - data[startIndex].altitude
-        if altitudeGain > 200.0 {  // Reasonable climb
+        if altitudeGain > 100.0 {  // Reasonable climb
             score += 20.0
-        } else if altitudeGain > 50.0 {
+        } else if altitudeGain > 30.0 {
             score += 10.0
         }
 

@@ -52,6 +52,10 @@ struct FlightDataPoint: Identifiable, Codable, Equatable {
     let lateralAccel: Double        // NY_LATERAL_ACCEL (g's)
     let longitudinalAccel: Double   // NX_LONG_ACCEL (g's)
 
+    // MARK: - Position
+    let latitude: Double?           // GPS_LAT (degrees, optional for visualization)
+    let longitude: Double?          // GPS_LONG (degrees, optional for visualization)
+
     // MARK: - Initializer
     init(
         id: UUID = UUID(),
@@ -79,7 +83,9 @@ struct FlightDataPoint: Identifiable, Codable, Equatable {
         rudderPos: Double,
         weightOnWheels: Bool,
         lateralAccel: Double,
-        longitudinalAccel: Double
+        longitudinalAccel: Double,
+        latitude: Double? = nil,
+        longitude: Double? = nil
     ) {
         self.id = id
         self.irigTime = irigTime
@@ -107,6 +113,8 @@ struct FlightDataPoint: Identifiable, Codable, Equatable {
         self.weightOnWheels = weightOnWheels
         self.lateralAccel = lateralAccel
         self.longitudinalAccel = longitudinalAccel
+        self.latitude = latitude
+        self.longitude = longitude
     }
 
     // MARK: - Computed Properties

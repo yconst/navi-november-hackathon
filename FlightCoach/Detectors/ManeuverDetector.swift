@@ -54,14 +54,14 @@ struct DetectionConfiguration {
 
     /// Default configuration for Split-S maneuvers
     static let splitS = DetectionConfiguration(
-        minConfidence: 0.75,
-        minDuration: 8.0,   // Typical Split-S: 10-15 seconds
-        maxDuration: 25.0
+        minConfidence: 0.60,  // Relaxed for aerobatic maneuvers
+        minDuration: 8.0,     // Typical Split-S: 10-15 seconds
+        maxDuration: 30.0     // Allow longer for training maneuvers
     )
 
     /// Default configuration for takeoff/landing
     static let groundTransition = DetectionConfiguration(
-        minConfidence: 0.90,  // Very high confidence for clear events
+        minConfidence: 0.75,  // High confidence for clear events
         minDuration: 2.0,
         maxDuration: 30.0
     )

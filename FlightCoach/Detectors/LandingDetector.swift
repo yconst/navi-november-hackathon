@@ -110,7 +110,7 @@ actor LandingDetector: ManeuverDetector {
 
         // Find where aircraft slows significantly or stops
         for i in (touchdownIdx + 20)..<endSearchIdx {
-            let airspeed = data[i].airspeed
+            let airspeed = data[i].computedAirspeed
 
             // Very slow or stopped
             if airspeed < 10.0 {
@@ -121,7 +121,7 @@ actor LandingDetector: ManeuverDetector {
             if airspeed < 30.0 {
                 let checkWindow = min(i + 40, data.count)
                 if i + 40 < data.count {
-                    let speedStdDev = data.standardDeviation(of: \.airspeed, in: i..<checkWindow)
+                    let speedStdDev = data.standardDeviation(of: \.computedAirspeed, in: i..<checkWindow)
                     if speedStdDev < 5.0 {  // Steady taxi speed
                         return i
                     }
@@ -151,9 +151,9 @@ actor LandingDetector: ManeuverDetector {
 
         // 2. Airspeed decrease (20 points)
         maxScore += 20.0
-        let startSpeed = data[startIndex].airspeed
-        let endSpeed = data[endIndex].airspeed
-        if startSpeed > endSpeed + 50.0 {  // Lost at least 50 kts
+        let startSpeed = data[startIndex].computedAirspeed
+        let endSpeed = data[endIndex].computedAirspeed
+        if startSpeed > endSpeed + 30.0 {  // Lost at least 30 kts
             score += 20.0
         } else if startSpeed > endSpeed {
             score += 10.0
