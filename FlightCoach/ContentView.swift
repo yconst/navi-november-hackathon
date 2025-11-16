@@ -89,24 +89,34 @@ struct ContentView: View {
         isLoading = true
 
         do {
+            // Load CSV data
             let dataLoader = DataLoader()
             let dataPoints = try await dataLoader.loadCSV(from: url)
 
-            // Update document
+            // Update document with imported data
             await MainActor.run {
                 document.telemetryData = dataPoints
                 document.flightDate = dataPoints.first?.irigTime
                 document.state = .analyzing
-                document.analysisProgress = 0.3
+                document.analysisProgress = 0.0
+            }
 
-                // Simulate analysis for now (Phase 2 will implement this)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    document.analysisCompleted = true
-                    document.analysisDate = Date()
-                    document.analysisProgress = 1.0
-                    document.state = .ready
-                    isLoading = false
+            // Run maneuver detection
+            let detectionService = ManeuverDetectionService()
+            let maneuvers = await detectionService.detectAllManeuvers(in: dataPoints) { progress in
+                Task { @MainActor in
+                    document.analysisProgress = progress
                 }
+            }
+
+            // Update document with results
+            await MainActor.run {
+                document.detectedManeuvers = maneuvers
+                document.analysisCompleted = true
+                document.analysisDate = Date()
+                document.analysisProgress = 1.0
+                document.state = .ready
+                isLoading = false
             }
         } catch {
             await MainActor.run {
@@ -226,33 +236,70 @@ struct ReadyView: View {
     let document: FlightCoachDocument
 
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.green)
+        ScrollView {
+            VStack(spacing: 20) {
+                // Summary Card
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Analysis Complete")
+                            .font(.headline)
+                        Spacer()
+                    }
 
-            Text("Analysis Complete")
-                .font(.title2)
-                .fontWeight(.semibold)
+                    Divider()
 
-            VStack(spacing: 12) {
-                InfoRow(label: "Data Points", value: "\(document.dataPointCount)")
-                InfoRow(label: "Duration", value: formatDuration(document.duration))
-                InfoRow(label: "Maneuvers", value: "\(document.detectedManeuvers.count)")
-                if let date = document.flightDate {
-                    InfoRow(label: "Flight Date", value: formatDate(date))
+                    InfoRow(label: "Data Points", value: "\(document.dataPointCount)")
+                    InfoRow(label: "Duration", value: formatDuration(document.duration))
+                    InfoRow(label: "Maneuvers", value: "\(document.detectedManeuvers.count)")
+                    if let date = document.flightDate {
+                        InfoRow(label: "Flight Date", value: formatDate(date))
+                    }
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+
+                // Maneuvers List
+                if !document.detectedManeuvers.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Detected Maneuvers")
+                            .font(.title3)
+                            .fontWeight(.bold)
+
+                        ForEach(document.detectedManeuvers) { maneuver in
+                            NavigationLink {
+                                ManeuverDetailView(
+                                    maneuver: maneuver,
+                                    flightStartTime: document.telemetryData.first?.irigTime
+                                )
+                            } label: {
+                                ManeuverRowView(
+                                    maneuver: maneuver,
+                                    flightStartTime: document.telemetryData.first?.irigTime
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(.system(size: 40))
+                            .foregroundColor(.secondary)
+                        Text("No maneuvers detected")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("The flight data didn't contain any recognizable maneuvers")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
                 }
             }
             .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-
-            Text("Tap the microphone to ask questions")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.top)
         }
-        .padding()
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -280,6 +327,237 @@ struct InfoRow: View {
             Spacer()
             Text(value)
                 .fontWeight(.semibold)
+        }
+    }
+}
+
+// MARK: - Maneuver Row View
+
+struct ManeuverRowView: View {
+    let maneuver: Maneuver
+    let flightStartTime: Date?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Icon
+            Image(systemName: maneuver.type.icon)
+                .font(.title2)
+                .foregroundColor(.white)
+                .frame(width: 50, height: 50)
+                .background(maneuver.type.color)
+                .cornerRadius(10)
+
+            // Details
+            VStack(alignment: .leading, spacing: 4) {
+                Text(maneuver.type.displayName)
+                    .font(.headline)
+
+                HStack(spacing: 16) {
+                    Label(formatTime(maneuver.startTime), systemImage: "clock")
+                    Label(formatDuration(maneuver.duration), systemImage: "timer")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // Confidence Badge
+            VStack(spacing: 2) {
+                Text("\(Int(maneuver.confidence * 100))%")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                Text("conf")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+
+    private func formatTime(_ time: Date) -> String {
+        guard let startTime = flightStartTime else {
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            return formatter.string(from: time)
+        }
+
+        let elapsed = time.timeIntervalSince(startTime)
+        let minutes = Int(elapsed) / 60
+        let seconds = Int(elapsed) % 60
+        return "\(minutes):\(String(format: "%02d", seconds))"
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        return String(format: "%.1fs", duration)
+    }
+}
+
+// MARK: - Maneuver Detail View
+
+struct ManeuverDetailView: View {
+    let maneuver: Maneuver
+    let flightStartTime: Date?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                HStack {
+                    Image(systemName: maneuver.type.icon)
+                        .font(.largeTitle)
+                        .foregroundColor(.white)
+                        .frame(width: 70, height: 70)
+                        .background(maneuver.type.color)
+                        .cornerRadius(15)
+
+                    VStack(alignment: .leading) {
+                        Text(maneuver.type.displayName)
+                            .font(.title)
+                            .fontWeight(.bold)
+                        Text("\(Int(maneuver.confidence * 100))% Confidence")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+                }
+
+                Divider()
+
+                // Timing
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Timing")
+                        .font(.headline)
+
+                    DetailRow(label: "Start Time", value: formatTime(maneuver.startTime))
+                    DetailRow(label: "End Time", value: formatTime(maneuver.endTime))
+                    DetailRow(label: "Duration", value: String(format: "%.1f seconds", maneuver.duration))
+                }
+
+                Divider()
+
+                // Data Range
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Data Range")
+                        .font(.headline)
+
+                    DetailRow(label: "Start Index", value: "\(maneuver.startIndex)")
+                    DetailRow(label: "End Index", value: "\(maneuver.endIndex)")
+                    DetailRow(label: "Data Points", value: "\(maneuver.endIndex - maneuver.startIndex + 1)")
+                }
+
+                // Phases (if available)
+                if let phases = maneuver.phases, !phases.isEmpty {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Phases")
+                            .font(.headline)
+
+                        ForEach(phases) { phase in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(phase.name)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                    Spacer()
+                                    Text(String(format: "%.1fs", phase.duration))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                if !phase.keyMetrics.isEmpty {
+                                    ForEach(Array(phase.keyMetrics.keys.sorted()), id: \.self) { key in
+                                        if let value = phase.keyMetrics[key] {
+                                            DetailRow(
+                                                label: key,
+                                                value: String(format: "%.2f", value),
+                                                small: true
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                        }
+                    }
+                }
+
+                // Detection Method
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Detection Info")
+                        .font(.headline)
+                    DetailRow(label: "Method", value: maneuver.detectionMethod.rawValue.capitalized)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Maneuver Details")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func formatTime(_ time: Date) -> String {
+        guard let startTime = flightStartTime else {
+            let formatter = DateFormatter()
+            formatter.timeStyle = .medium
+            return formatter.string(from: time)
+        }
+
+        let elapsed = time.timeIntervalSince(startTime)
+        let minutes = Int(elapsed) / 60
+        let seconds = Int(elapsed) % 60
+        return "\(minutes):\(String(format: "%02d", seconds))"
+    }
+}
+
+struct DetailRow: View {
+    let label: String
+    let value: String
+    var small: Bool = false
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.secondary)
+                .font(small ? .caption : .body)
+            Spacer()
+            Text(value)
+                .fontWeight(small ? .regular : .semibold)
+                .font(small ? .caption : .body)
+        }
+    }
+}
+
+// MARK: - Maneuver Type Extensions
+
+extension ManeuverType {
+    var color: Color {
+        switch self {
+        case .splitS:
+            return .purple
+        case .takeoff:
+            return .green
+        case .landing:
+            return .orange
+        case .levelFlight:
+            return .blue
+        case .windUpTurn:
+            return .indigo
+        case .rollerCoaster:
+            return .teal
+        case .climb:
+            return .mint
+        case .descent:
+            return .cyan
+        case .unknown:
+            return .gray
         }
     }
 }
